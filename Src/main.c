@@ -18,12 +18,10 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-// #include "cmsis_os.h"
 #include "adc.h"
 #include "dma.h"
 #include "i2c.h"
 #include "spi.h"
-#include "stm32f4xx_hal.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -128,7 +126,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-    ///////////////////////// Do Not Use this! Use the FreeRTOS loops!
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
