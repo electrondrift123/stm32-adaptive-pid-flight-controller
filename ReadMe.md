@@ -124,16 +124,26 @@ A real-time flight controller for STM32F4-based drones built with FreeRTOS and c
 ## 📁 Repository Structure
 
 ```
+
 .
-├── .vscode/           # VS Code workspace settings
-├── images/            # README images (drone, PCB, diagrams)
-├── include/           # Header files (default)
-├── lib/               # Custom libraries (sensor drivers, control, etc.)
-├── src/               # main.cpp and core application code
-├── test/              # Unit tests (default)
-├── .gitignore
-├── README.md
-└── platformio.ini     # PlatformIO build configuration
+├── .vscode/                 # VS Code workspace settings
+├── build/                   # Compiled build artifacts
+├── cmake/                   # CMake configuration files
+├── Drivers/                 # STM32 HAL and low-level drivers
+├── images/                  # README images and diagrams
+├── Inc/                     # Header files (default)
+├── Middlewares/             # Third-party middleware (FreeRTOS, etc.)
+├── Src/                     # Main application source code files
+├── .clangd                  # Clangd configuration
+├── .gitignore               # Git ignore rules
+├── .mxproject               # STM32CubeMX project settings
+├── CMakeLists.txt           # Main CMake build script
+├── CMakePresets.json        # CMake build presets
+├── LICENSE                  # License file
+├── platformio.ini           # PlatformIO build configuration
+├── README.md                # Project documentation
+└── startup_stm32f411xe.s    # STM32F411 startup assembly code
+
 ```
 
 ## Connect
@@ -141,6 +151,3 @@ A real-time flight controller for STM32F4-based drones built with FreeRTOS and c
 - **Email:** ivantuanadatu204@gmail.com
 - **LinkedIn:** [linkedin.com/in/ayob-ii-tuanadatu](www.linkedin.com/in/ayob-ii-tuanadatu)
 
-## 📄 License
-
-MIT
