@@ -37,6 +37,14 @@ set(MX_Application_Src
     ${CMAKE_SOURCE_DIR}/Src/sysmem.c
     ${CMAKE_SOURCE_DIR}/Src/syscalls.c
     ${CMAKE_SOURCE_DIR}/startup_stm32f411xe.s
+    ${CMAKE_SOURCE_DIR}/Src/mpu6050.c
+    ${CMAKE_SOURCE_DIR}/Src/bmp280.c
+    ${CMAKE_SOURCE_DIR}/Src/qmc5883p.c
+    ${CMAKE_SOURCE_DIR}/Src/helper_functions.c
+    ${CMAKE_SOURCE_DIR}/Src/ema.c
+    ${CMAKE_SOURCE_DIR}/Src/madgwick_filter.c
+    ${CMAKE_SOURCE_DIR}/Src/kalman_altitude.c
+    ${CMAKE_SOURCE_DIR}/Src/sync.c
 )
 
 # STM32 HAL/LL Drivers
@@ -89,7 +97,8 @@ set(MX_LINK_DIRS
 # Project static libraries
 set(MX_LINK_LIBS 
     STM32_Drivers
-    FreeRTOS	
+    FreeRTOS
+	
 )
 # Interface library for includes and symbols
 add_library(stm32cubemx INTERFACE)

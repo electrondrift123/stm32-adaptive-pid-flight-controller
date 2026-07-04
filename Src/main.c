@@ -18,10 +18,12 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+// #include "cmsis_os.h"
 #include "adc.h"
 #include "dma.h"
 #include "i2c.h"
 #include "spi.h"
+#include "stm32f4xx_hal.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -106,7 +108,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_Delay(100);
   if (!mpu6050_init(&hi2c1)) init_success = false; 
-
+  if (!bmp280_init(&hi2c1)) init_success = false;
+  if (!qmc5883p_init(&hi2c1)) init_success = false;
   if (!sync_init()) init_success = false;
   /* USER CODE END 2 */
 
@@ -126,7 +129,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
+    ///////////////////////// Do Not Use this! Use the FreeRTOS loops!
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
