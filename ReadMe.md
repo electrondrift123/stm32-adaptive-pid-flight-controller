@@ -2,7 +2,7 @@
 
 > **Flight-Validated on 450mm Quadrotor**
 
-A real-time flight controller for STM32F4-based drones built with FreeRTOS and custom drivers.
+A real-time adaptive flight controller for STM32F4-based drones built with FreeRTOS and custom sensor drivers.
 
 ---
 

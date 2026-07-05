@@ -45,6 +45,10 @@ set(MX_Application_Src
     ${CMAKE_SOURCE_DIR}/Src/madgwick_filter.c
     ${CMAKE_SOURCE_DIR}/Src/kalman_altitude.c
     ${CMAKE_SOURCE_DIR}/Src/sync.c
+    ${CMAKE_SOURCE_DIR}/Src/logging.c
+    ${CMAKE_SOURCE_DIR}/Src/lygapid.c
+    ${CMAKE_SOURCE_DIR}/Src/velocity_z_control.c
+    ${CMAKE_SOURCE_DIR}/Src/indicators.c
 )
 
 # STM32 HAL/LL Drivers

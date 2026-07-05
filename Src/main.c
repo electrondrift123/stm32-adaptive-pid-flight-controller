@@ -22,6 +22,7 @@
 #include "adc.h"
 #include "dma.h"
 #include "i2c.h"
+#include "indicators.h"
 #include "spi.h"
 #include "stm32f4xx_hal.h"
 #include "tim.h"
@@ -35,6 +36,8 @@
 #include "bmp280.h"
 #include "qmc5883p.h"
 #include "sync.h"
+#include "logging.h"
+#include "helper_functions.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -106,11 +109,22 @@ int main(void)
   MX_TIM2_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+  led_on();
   HAL_Delay(100);
   if (!mpu6050_init(&hi2c1)) init_success = false; 
   if (!bmp280_init(&hi2c1)) init_success = false;
   if (!qmc5883p_init(&hi2c1)) init_success = false;
   if (!sync_init()) init_success = false;
+
+  if (!init_success) {
+    log_printf("Initialization failed!\r\n");
+    buzz_error();
+    Error_Handler();
+  } else {
+    log_printf("Initialized successfully.\r\n");
+    buzz_init_success();
+    led_off();
+  }
   /* USER CODE END 2 */
 
   /* Init scheduler */

@@ -8,7 +8,7 @@ typedef struct{
     float order; // [1,2]
     float fc; // cutoff frequency
     float fs; // sampling time
-    float tau; // tie constant
+    float tau; // time constant
     float alpha; // [0,1]
     float x_prev;
     float x_prev2; // for 2nd order
