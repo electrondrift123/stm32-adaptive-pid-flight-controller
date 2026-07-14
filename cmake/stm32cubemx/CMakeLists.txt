@@ -49,6 +49,7 @@ set(MX_Application_Src
     ${CMAKE_SOURCE_DIR}/Src/lygapid.c
     ${CMAKE_SOURCE_DIR}/Src/velocity_z_control.c
     ${CMAKE_SOURCE_DIR}/Src/indicators.c
+    ${CMAKE_SOURCE_DIR}/Src/rx_com.c
 )
 
 # STM32 HAL/LL Drivers

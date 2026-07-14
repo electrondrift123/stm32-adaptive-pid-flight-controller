@@ -151,6 +151,13 @@ void MX_FREERTOS_Init(void) {
   init_flag = true;
 }
 
+// // ------------------- ISR -------------------
+// void nrfInterruptHandler(void) {
+//   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+//   vTaskNotifyGiveFromISR(radioTaskHandle, &xHigherPriorityTaskWoken);
+//   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+// }
+
 void blink_task(void *parameters){
   (void)parameters;
   const TickType_t intervalTicks = pdMS_TO_TICKS(500); // 500 ms = 1 Hz
@@ -663,7 +670,9 @@ void controller_task(void *parameters){
   }
 }
 
-// void rx_task(void *parameters){}
+// void rx_task(void *parameters){
+
+// }
 
 void vbat_task(void *parameters){
   (void)parameters;
