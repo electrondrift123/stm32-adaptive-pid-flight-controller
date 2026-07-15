@@ -111,8 +111,8 @@ float computeLyGAPID_in(LyGAPIDControllerData_t* lygapid, float setpoint, float 
     }
     else if (lygapid->mode == 1.0f){ // @ static PID
         lygapid->Kp = 25.0f; // was 25.0f
-        lygapid->Ki = 10.0f; // was 10.0f 
-        lygapid->Kd = 0.03f; // Can do 0.03 without motor heating. Was 0.005f. Next: [0.04, 0.05]
+        lygapid->Ki = 5.0f; // was 10.0f 
+        lygapid->Kd = 0.05f; // Can do 0.03 without motor heating. Was 0.005f. Next: [0.04, 0.05]
     }
 
     return u;

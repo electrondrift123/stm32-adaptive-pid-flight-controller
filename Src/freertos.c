@@ -19,6 +19,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
+#include "timers.h"
 #include "i2c.h"
 #include "portmacro.h"
 #include "projdefs.h"
@@ -39,6 +40,7 @@
 #include "indicators.h"
 #include "lygapid.h"
 #include "velocity_z_control.h"
+#include "rx_com.h"
 
 // DEFINE PRIORITY LEVELS (status: working)
 #define PRIORITY_PID_FUSION       1 // 500 Hz -> try prio: 2 (radio task starve)
@@ -49,6 +51,12 @@
 #define PRIORITY_BATTERY_MONITOR  1 // 10 Hz
 
 // Global variables (to be transferred in: shared_data module)
+
+// Failsafe for Radio          
+TimerHandle_t linkWatchdogTimer = NULL;
+const TickType_t LINK_TIMEOUT_MS = 200;           
+volatile bool connection_ok = false;
+
 mpu6050Data_t imuData;
 bmp280Data_t baroData;
 magData_t magData;
@@ -64,14 +72,77 @@ int16_t cmd[5] = {0}; // [vz_cmd, yaw_rate_cmd, pitch_cmd, roll_cmd, kill]
 float MadgwickSensorList[9] = {0}; // [a(3), w(3), m(3)]
 float eulerAngles[3] = {0}; // roll, pitch, yaw angles
 
+TaskHandle_t radioTaskHandle;
+
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
 // define freeRTOS tasks
 void blink_task(void *parameters);
 void sensor_task(void *parameters);
 void controller_task(void *parameters);
-// void rx_task(void *parameters);
+void rx_task(void *parameters);
 void vbat_task(void *parameters);
+
+// ------------------- ISR -------------------
+void nrfInterruptHandler(void) {
+  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+  vTaskNotifyGiveFromISR(radioTaskHandle, &xHigherPriorityTaskWoken);
+  portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+
+void fastRadioRecoverRX(void) {
+  radio_stopListening();
+  radio_flush_rx();
+  radio_flush_tx();
+  radio_startListening();
+  radio_clearStatusFlags();
+}
+
+// === Timer callback (runs in timer task context!) ===
+static void linkTimeoutCallback(TimerHandle_t xTimer){
+  (void) xTimer;
+
+  connection_ok = false;
+
+  // Safest & fastest way for very short write
+  taskENTER_CRITICAL();
+  cmd[0] = 0.0f; // zero Vcmd
+  cmd[1] = 0.0f; // zero yaw input
+  cmd[2] = 0.0f; // zero pitch input
+  cmd[3] = 0.0f; // zero roll input
+  if (cmd[4] == 0.0f) cmd[5] = 1.0f;   // set E-landing flag;   
+  taskEXIT_CRITICAL();
+}
+
+void initLinkWatchdog(void){
+  if (linkWatchdogTimer != NULL) {
+    // already created → avoid double creation
+    return;
+  }
+
+  linkWatchdogTimer = xTimerCreate(
+    "LinkWD",
+    LINK_TIMEOUT_MS / portTICK_PERIOD_MS, // timer period in ticks
+    pdTRUE,                 // auto-reload
+    NULL,
+    linkTimeoutCallback
+  );
+
+  if (linkWatchdogTimer == NULL) {
+      // Critical error - handle somehow (LED blink fast, Serial error, etc.)
+      // For development you can leave it like this:
+      // for(;;) { /* fail safe loop */ }
+      connection_ok = false;
+      taskENTER_CRITICAL();
+      cmd[4] = 1.0f;  // stay killed
+      taskEXIT_CRITICAL();
+  }
+
+  // We do NOT start it here — first valid packet will start/reset it
+}
+
+
+
 
 BaseType_t result;
 bool init_flag = false; // Flag to indicate that FreeRTOS tasks have been initialized
@@ -120,19 +191,19 @@ void MX_FREERTOS_Init(void) {
     Error_Handler();
   }
 
-  // result = xTaskCreate(
-  //   rx_task,
-  //   "nRF24 RX task",
-  //   256,
-  //   NULL,
-  //   PRIORITY_RADIO,
-  //   &radioTaskHandle
-  // );
-  // if (result != pdPASS) {
-  //   init_flag = false;
-  //   buzz_error();
-  //   Error_Handler();
-  // }
+  result = xTaskCreate(
+    rx_task,
+    "nRF24 RX task",
+    256,
+    NULL,
+    PRIORITY_RADIO,
+    &radioTaskHandle
+  );
+  if (result != pdPASS) {
+    init_flag = false;
+    buzz_error();
+    Error_Handler();
+  }
 
   result = xTaskCreate(
     vbat_task,
@@ -150,13 +221,6 @@ void MX_FREERTOS_Init(void) {
 
   init_flag = true;
 }
-
-// // ------------------- ISR -------------------
-// void nrfInterruptHandler(void) {
-//   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-//   vTaskNotifyGiveFromISR(radioTaskHandle, &xHigherPriorityTaskWoken);
-//   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-// }
 
 void blink_task(void *parameters){
   (void)parameters;
@@ -670,9 +734,86 @@ void controller_task(void *parameters){
   }
 }
 
-// void rx_task(void *parameters){
+void rx_task(void *parameters) {
+  (void)parameters;
 
-// }
+  int16_t local_telemetry[6] = {0}; 
+  int16_t rx_load[5] = {0};
+
+  uint8_t PIPE_INDEX = 0x00;
+
+  initLinkWatchdog();
+  connection_ok = false;
+
+  for (;;) {
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+    uint8_t flags = radio_clearStatusFlags();   
+
+    if (flags & 0x40) { // 0x40 from the STATUS reg RX_DR bit
+        while (radio_available()) {
+            connection_ok = true;
+
+            // Restart watchdog
+            if (xTimerIsTimerActive(linkWatchdogTimer) == pdFALSE) {
+              xTimerStart(linkWatchdogTimer, 0);
+            } else {
+              xTimerReset(linkWatchdogTimer, 0);
+            }
+
+            // Prepare ACK payload
+            if (xSemaphoreTake(eulerAnglesMutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+              local_telemetry[0] = (int16_t)eulerAngles[0];
+              local_telemetry[1] = (int16_t)eulerAngles[1];
+              local_telemetry[2] = (int16_t)eulerAngles[2];
+              xSemaphoreGive(eulerAnglesMutex);
+            }
+            if (xSemaphoreTake(telemetryMutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+              local_telemetry[3] = (int16_t)(telemetry[0] * 100.0f);
+              local_telemetry[4] = (int16_t)telemetry[4];
+              local_telemetry[5] = (int16_t)(telemetry[1] * 100.0f);
+              xSemaphoreGive(telemetryMutex);
+            }
+
+            radio_writeAckPayload(PIPE_INDEX, local_telemetry, sizeof(local_telemetry));
+
+            radio_read(rx_load, sizeof(rx_load));
+
+            // Process commands...
+            float Tcmd = (float)rx_load[0] / 100.0f;
+            float Ycmd = ((float)rx_load[1]) * DEG_TO_RAD;
+            float Pcmd = ((float)rx_load[2] / 100.0f) * DEG_TO_RAD * (-1.0f);
+            float Rcmd = ((float)rx_load[3] / 100.0f) * DEG_TO_RAD;
+            float kill = (rx_load[4] == 0) ? 0.0f : 1.0f;
+
+            if (xSemaphoreTake(nRF24Mutex, pdMS_TO_TICKS(1)) == pdTRUE) {
+                cmd[0] = constrainFloat(Tcmd, THROTTLE_MIN, THROTTLE_MAX);
+                cmd[1] = constrainFloat(Ycmd, -YAW_MAX, YAW_MAX);
+                cmd[2] = constrainFloat(Pcmd, -PITCH_ROLL_MAX, PITCH_ROLL_MAX);
+                cmd[3] = constrainFloat(Rcmd, -PITCH_ROLL_MAX, PITCH_ROLL_MAX);
+                cmd[4] = kill;
+                xSemaphoreGive(nRF24Mutex);
+            }
+        }
+    }
+
+    // Handle TX FIFO issues (MAX_RT flag)
+    if (flags & 0x10) {
+      radio_flush_tx();
+    }
+
+    // === NEW: Periodic recovery check ===
+    static uint32_t lastRecoverCheck = 0;
+    if (xTaskGetTickCount() - lastRecoverCheck > pdMS_TO_TICKS(500)) { // was 200
+        lastRecoverCheck = xTaskGetTickCount();
+        
+        if (!connection_ok) {
+          fastRadioRecoverRX();     
+        }
+    }
+  }
+}
+
 
 void vbat_task(void *parameters){
   (void)parameters;

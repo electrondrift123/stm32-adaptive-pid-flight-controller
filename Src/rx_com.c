@@ -5,8 +5,8 @@
 #include <stdint.h>
 
 // define macros for the nRF24L01+ commands (table 16, p46 of the datasheet)
-#define R_REGISTER 0x10     // 1-5 LSByte first (000A AAAA), A AAAA = register address
-#define W_REGISTER 0x20     // 1-5 LSByte first (001A AAAA), A AAAA = register address
+#define R_REGISTER       0x00     // 1-5 LSByte first (000A AAAA), A AAAA = register address
+#define W_REGISTER       0x20     // 1-5 LSByte first (001A AAAA), A AAAA = register address
 
 #define R_RX_PAYLOAD    (0b0110 << 4) | (0b0001) // 1-32 Bytes, LSByte first
 #define W_TX_PAYLOAD    (0b1010 << 4) | (0b0001) // 1-32 Bytes, LSByte first
@@ -138,3 +138,17 @@ bool rx_com_init(SPI_HandleTypeDef *hspi){
     return true; // proceed with RX mode
 }
 
+bool radio_available(void){} 
+void radio_writeAckPayload(){ // params: pipe index, payload (list), size
+
+}
+
+void radio_read(){ // buffer (list), size(buffer)
+
+}
+
+void radio_startListening(void){}
+void radio_stopListening(void){}
+void radio_flush_tx(void){} // Handle TX FIFO issues (MAX_RT flag)
+void radio_flush_rx(void){}
+uint8_t radio_clearStatusFlags(void){}

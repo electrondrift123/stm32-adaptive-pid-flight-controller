@@ -28,11 +28,11 @@ Ayob II Tuanadatu - Bachelor of Science in Electrical Engineering (2026)
 #define CONTROLLER_MODE 1.0f // 0 = adaptive, 1 = static
 
 // Initial P-PID Gains:
-#define P   3.0f
+#define P   4.0f
 
-#define KP  50.0f
-#define KI  10.0f // was 15
-#define KD  0.005f
+#define KP  25.0f
+#define KI  5.0f
+#define KD  0.05f
 
 // MAX commands in float: 
 #define THROTTLE_MAX 100.0f // throttle is now [-0.8, 0.8] m/s cmd velocty z 
@@ -45,9 +45,8 @@ Ayob II Tuanadatu - Bachelor of Science in Electrical Engineering (2026)
 
 /////////////////////// end - define macros
 
-#define KP_OUT_MAX 8.0f // was 4.0f
-#define KP_OUT_MIN 3.0f
-
+#define KP_OUT_MAX 6.0f // was 8.0f
+#define KP_OUT_MIN 4.0f
 #define KP_MAX 120.0f // was 60.0f
 #define KP_MIN 40.0f
 
