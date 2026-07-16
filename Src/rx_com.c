@@ -192,7 +192,7 @@ bool rx_com_init(SPI_HandleTypeDef *hspi){
     nrf24_write_reg(hspi, FEATURE, EN_DPL | EN_ACK_PAY | EN_DYN_ACK);
 
     // PRIM_RX, CE need to set to HIGH to enter RX mode
-    radio_startListening(hspi); // maybe leave this so we can be more flexible for listening timing
+    radio_startListening(); // maybe leave this so we can be more flexible for listening timing
 
     return true; // proceed with RX mode
 }
