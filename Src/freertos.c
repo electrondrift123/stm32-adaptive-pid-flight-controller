@@ -19,6 +19,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "FreeRTOS.h"
+#include "spi.h"
 #include "timers.h"
 #include "i2c.h"
 #include "portmacro.h"
@@ -90,14 +91,6 @@ void nrfInterruptHandler(void) {
   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
-void fastRadioRecoverRX(void) {
-  radio_stopListening();
-  radio_flush_rx();
-  radio_flush_tx();
-  radio_startListening();
-  radio_clearStatusFlags();
-}
-
 // === Timer callback (runs in timer task context!) ===
 static void linkTimeoutCallback(TimerHandle_t xTimer){
   (void) xTimer;
@@ -140,8 +133,6 @@ void initLinkWatchdog(void){
 
   // We do NOT start it here — first valid packet will start/reset it
 }
-
-
 
 
 BaseType_t result;
@@ -748,10 +739,10 @@ void rx_task(void *parameters) {
   for (;;) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-    uint8_t flags = radio_clearStatusFlags();   
+    uint8_t flags = radio_clearStatusFlags(&hspi1);   
 
     if (flags & 0x40) { // 0x40 from the STATUS reg RX_DR bit
-        while (radio_available()) {
+        while (radio_available(&hspi1)) {
             connection_ok = true;
 
             // Restart watchdog
@@ -775,9 +766,9 @@ void rx_task(void *parameters) {
               xSemaphoreGive(telemetryMutex);
             }
 
-            radio_writeAckPayload(PIPE_INDEX, local_telemetry, sizeof(local_telemetry));
+            radio_writeAckPayload(&hspi1, PIPE_INDEX, local_telemetry, sizeof(local_telemetry));
 
-            radio_read(rx_load, sizeof(rx_load));
+            radio_read(&hspi1, rx_load, sizeof(rx_load));
 
             // Process commands...
             float Tcmd = (float)rx_load[0] / 100.0f;
@@ -799,7 +790,7 @@ void rx_task(void *parameters) {
 
     // Handle TX FIFO issues (MAX_RT flag)
     if (flags & 0x10) {
-      radio_flush_tx();
+      radio_flush_tx(&hspi1);
     }
 
     // === NEW: Periodic recovery check ===
@@ -808,7 +799,11 @@ void rx_task(void *parameters) {
         lastRecoverCheck = xTaskGetTickCount();
         
         if (!connection_ok) {
-          fastRadioRecoverRX();     
+          radio_stopListening();
+          radio_flush_rx(&hspi1);
+          radio_flush_tx(&hspi1);
+          radio_startListening();
+          radio_clearStatusFlags(&hspi1);     
         }
     }
   }
@@ -832,7 +827,7 @@ void vbat_task(void *parameters){
   for (;;){
     // Read battery voltage
     counter++;
-    uint16_t adc_value = readVbat();
+    uint16_t adc_value = readVbat(); 
     emaUpdate(&VbLPF, adc_value);
     adc_value = VbLPF.output; // Get filtered ADC value
 

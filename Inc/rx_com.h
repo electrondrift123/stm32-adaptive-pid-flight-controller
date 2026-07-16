@@ -12,13 +12,14 @@
 
 bool rx_com_init(SPI_HandleTypeDef *hspi);
 
-bool radio_available(void); 
-void radio_writeAckPayload(); // params: pipe index, payload (list), size
-void radio_read(); // buffer (list), size(buffer)
-void radio_startListening(void);
-void radio_stopListening(void);
-void radio_flush_tx(void); // Handle TX FIFO issues (MAX_RT flag)
-void radio_flush_rx(void);
-uint8_t radio_clearStatusFlags(void);
+bool radio_available(SPI_HandleTypeDef *hspi); 
+void radio_startListening();
+void radio_stopListening();
+void radio_flush_tx(SPI_HandleTypeDef *hspi); // Handle TX FIFO issues (MAX_RT flag)
+void radio_flush_rx(SPI_HandleTypeDef *hspi);
+uint8_t radio_clearStatusFlags(SPI_HandleTypeDef *hspi);
+
+void radio_writeAckPayload(SPI_HandleTypeDef *hspi, uint8_t pipe, const void* ack_buff, uint8_t len);
+void radio_read(SPI_HandleTypeDef *hspi, void* rx_buff, uint8_t len);
 
 #endif // RX_COM_H

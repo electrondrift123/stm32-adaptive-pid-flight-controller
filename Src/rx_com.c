@@ -73,6 +73,13 @@
 #define EN_ACK_PAY  (1 << 1) // Enable payload with ACK
 #define EN_DPL      (1 << 2) // Enable dynamic payload length
 
+void CSN_LOW(void){
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+}
+void CSN_HIGH(void){
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+}
+
 uint8_t nrf24_read_reg(SPI_HandleTypeDef *hspi, uint8_t reg){
     // prepare the command
     uint8_t cmd = R_REGISTER | reg; 
@@ -83,13 +90,13 @@ uint8_t nrf24_read_reg(SPI_HandleTypeDef *hspi, uint8_t reg){
 
     // CSN (PA4): HIGH to LOW transition to select the device
     // pull CSN low (PA4) to select the device
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+    CSN_LOW();
 
     // set the command byte to read the specified register
     HAL_SPI_TransmitReceive(hspi, tx_buffer, rx_buffer, 2, 100);
 
     // pull CSN high again (PA4) to deselect the device
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+    CSN_HIGH();
 
     return rx_buffer[1]; // Return the value read from the register
 }
@@ -102,11 +109,63 @@ void nrf24_write_reg(SPI_HandleTypeDef *hspi, uint8_t reg, uint8_t value){
     uint8_t rx_buffer[2] = {0};
     
     // pull CSN low (PA4) to select the device
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+    CSN_LOW();
 
     HAL_SPI_TransmitReceive(hspi, tx_buffer, rx_buffer, 2, 100);
 
-    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET); // pull CSN high again (PA4) to deselect the device
+    CSN_HIGH(); // pull CSN high again (PA4) to deselect the device
+}
+
+bool radio_available(SPI_HandleTypeDef *hspi){
+    /* Checks if TX is available.
+    This function reads the STATUS register (0x07) and 
+    examines the RX_P_NO field (bits 3, 2, and 1).
+    */
+    uint8_t status = nrf24_read_reg(hspi, STATUS);
+    uint8_t pipe_no = (status >> 1) & 0b111;
+
+    if (pipe_no == 0b111 || pipe_no == 0b110) return false;
+
+    return true;
+} 
+
+uint8_t radio_clearStatusFlags(SPI_HandleTypeDef *hspi){
+    uint8_t status = nrf24_read_reg(hspi, STATUS);
+
+    // clear bit: 4-6 by writing "1"
+    nrf24_write_reg(hspi, STATUS, status);
+
+    return status;
+}
+
+void radio_flush_tx(SPI_HandleTypeDef *hspi){
+    uint8_t cmd = FLUSH_TX;
+    uint8_t rx_buffer = 0x00;
+
+    CSN_LOW(); // pull CSN low
+    HAL_SPI_TransmitReceive(hspi, &cmd, &rx_buffer, 1, 100); // spi cmd
+    CSN_HIGH(); // pull CSN high 
+} 
+
+void radio_flush_rx(SPI_HandleTypeDef *hspi){
+    uint8_t cmd = FLUSH_RX;
+    uint8_t rx_buffer = 0x00;
+
+    CSN_LOW(); // pull CSN low
+    HAL_SPI_TransmitReceive(hspi, &cmd, &rx_buffer, 1, 100); // spi cmd
+    CSN_HIGH(); // pull CSN high 
+}
+
+void radio_startListening(){
+    /* Standby-1 to RX mode by writing PRIM-RX & CE to 1.
+    And since the PRIM_RX is already 1 from the initialization, 
+    we can just focus on the CE pin by pulling it HIGH */
+
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_SET); // CE pin HIGH to enter RX mode
+}
+
+void radio_stopListening(){
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_RESET); // CE pin HIGH to enter RX mode
 }
 
 bool rx_com_init(SPI_HandleTypeDef *hspi){ 
@@ -133,22 +192,46 @@ bool rx_com_init(SPI_HandleTypeDef *hspi){
     nrf24_write_reg(hspi, FEATURE, EN_DPL | EN_ACK_PAY | EN_DYN_ACK);
 
     // PRIM_RX, CE need to set to HIGH to enter RX mode
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_SET); // CE pin HIGH to enter RX mode
+    radio_startListening(hspi); // maybe leave this so we can be more flexible for listening timing
 
     return true; // proceed with RX mode
 }
 
-bool radio_available(void){} 
-void radio_writeAckPayload(){ // params: pipe index, payload (list), size
+void radio_writeAckPayload(SPI_HandleTypeDef *hspi, uint8_t pipe, const void* ack_buff, uint8_t len){ 
+    uint8_t cmd = W_ACK_PAYLOAD | pipe;
 
+    const uint8_t *byte_buff = (const uint8_t*)ack_buff; // declare const for looping
+    uint8_t rx_buffer = 0; // dummy
+
+    CSN_LOW();
+
+    // send cmd byte
+    HAL_SPI_TransmitReceive(hspi, &cmd, &rx_buffer, 1, 100);
+    
+    // send the payload bytes one by one
+    for (uint8_t i = 0; i < len; i++){
+        HAL_SPI_TransmitReceive(hspi, &byte_buff[i], &rx_buffer, 1, 100);
+    }
+
+    CSN_HIGH(); 
 }
 
-void radio_read(){ // buffer (list), size(buffer)
+void radio_read(SPI_HandleTypeDef *hspi, void* rx_buff, uint8_t len){ 
+    uint8_t cmd = R_RX_PAYLOAD;
+    uint8_t rx_dummy = 0;
+    
+    uint8_t tx_buffer = 0;
+    uint8_t *rx_buffer = (uint8_t*)rx_buff; 
 
+    CSN_LOW();
+    
+    // send the cmd:
+    HAL_SPI_TransmitReceive(hspi, &cmd, &rx_dummy, 1, 100);
+
+    // read the RX FIFO one by one
+    for (uint8_t i = 0; i < len; i++){
+        HAL_SPI_TransmitReceive(hspi, &tx_buffer, &rx_buffer[i], 1, 100);
+    }
+
+    CSN_HIGH();
 }
-
-void radio_startListening(void){}
-void radio_stopListening(void){}
-void radio_flush_tx(void){} // Handle TX FIFO issues (MAX_RT flag)
-void radio_flush_rx(void){}
-uint8_t radio_clearStatusFlags(void){}
